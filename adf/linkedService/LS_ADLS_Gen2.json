@@ -1,0 +1,11 @@
+{
+  "name": "LS_ADLS_Gen2",
+  "properties": {
+    "annotations": [],
+    "type": "AzureBlobFS",
+    "typeProperties": {
+      "url": "https://REPLACE-yourstorageaccount.dfs.core.windows.net",
+      "accountKind": "StorageV2"
+    }
+  }
+}

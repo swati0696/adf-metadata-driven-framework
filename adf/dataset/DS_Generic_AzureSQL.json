@@ -1,0 +1,18 @@
+{
+  "name": "DS_Generic_AzureSQL",
+  "properties": {
+    "description": "One dataset for every SQL source. Schema and table arrive as parameters, so adding a source never requires a new dataset.",
+    "linkedServiceName": { "referenceName": "LS_AzureSQL_Source", "type": "LinkedServiceReference" },
+    "parameters": {
+      "SchemaName": { "type": "string" },
+      "TableName":  { "type": "string" }
+    },
+    "annotations": ["generic"],
+    "type": "AzureSqlTable",
+    "schema": [],
+    "typeProperties": {
+      "schema": { "value": "@dataset().SchemaName", "type": "Expression" },
+      "table":  { "value": "@dataset().TableName",  "type": "Expression" }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "LS_AzureSQL_Source",
+  "properties": {
+    "description": "Source system connection. Password is pulled from Key Vault at runtime.",
+    "annotations": [],
+    "type": "AzureSqlDatabase",
+    "typeProperties": {
+      "server": "REPLACE-source-server.database.windows.net",
+      "database": "REPLACE-source-db",
+      "encrypt": "mandatory",
+      "authenticationType": "SQL",
+      "userName": "REPLACE-etl-reader",
+      "password": {
+        "type": "AzureKeyVaultSecret",
+        "store": { "referenceName": "LS_KeyVault", "type": "LinkedServiceReference" },
+        "secretName": "source-sql-password"
+      }
+    }
+  }
+}

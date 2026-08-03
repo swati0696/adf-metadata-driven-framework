@@ -1,0 +1,15 @@
+flowchart TD
+    T["Schedule Trigger<br/>daily 02:00"] --> M["PL_Master_Ingestion"]
+    M --> L["Lookup<br/>ctl.usp_GetActiveSources"]
+    L --> FE{"ForEach<br/>batchCount: 8<br/>isSequential: false"}
+    FE --> EX["PL_Ingest_Single_Source"]
+    EX --> S1["SP_LogStart"]
+    S1 --> CP["Copy Activity<br/>parameterised source + sink"]
+    CP -->|Succeeded| WM["SP_UpdateWatermark"]
+    CP -->|Failed| ERR["SP_LogFailure"]
+    WM --> S2["SP_LogSuccess"]
+    CP --> ADLS[("ADLS Gen2<br/>bronze/{path}/ingest_date=")]
+    ADLS --> DBX["Databricks<br/>bronze_to_silver_merge"]
+    DBX --> SILVER[("Silver Delta")]
+    KV["Key Vault"] -.-> CP
+    CTL[("ctl.SourceRegistry<br/>ctl.WatermarkControl<br/>ctl.PipelineAuditLog")] -.-> L

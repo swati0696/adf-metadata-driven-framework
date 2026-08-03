@@ -1,0 +1,93 @@
+{
+  "name": "PL_Master_Ingestion",
+  "properties": {
+    "description": "Reads the active source registry and fans out one child pipeline run per source.",
+    "activities": [
+      {
+        "name": "LKP_GetActiveSources",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:10:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 60,
+          "secureOutput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderStoredProcedureName": "[ctl].[usp_GetActiveSources]",
+            "storedProcedureParameters": {
+              "SourceSystem": {
+                "type": "String",
+                "value": {
+                  "value": "@pipeline().parameters.SourceSystem",
+                  "type": "Expression"
+                }
+              }
+            },
+            "queryTimeout": "0.02:00:00"
+          },
+          "dataset": {
+            "referenceName": "DS_Control_AzureSQL",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "FE_EachSource",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "LKP_GetActiveSources",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@activity('LKP_GetActiveSources').output.value",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 8,
+          "activities": [
+            {
+              "name": "EXEC_IngestSingleSource",
+              "type": "ExecutePipeline",
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "PL_Ingest_Single_Source",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "SourceId":        { "value": "@item().SourceId",        "type": "Expression" },
+                  "SourceSchema":    { "value": "@item().SourceSchema",    "type": "Expression" },
+                  "SourceTable":     { "value": "@item().SourceTable",     "type": "Expression" },
+                  "SourceQuery":     { "value": "@item().SourceQuery",     "type": "Expression" },
+                  "TargetContainer": { "value": "@item().TargetContainer", "type": "Expression" },
+                  "TargetPath":      { "value": "@item().TargetPath",      "type": "Expression" },
+                  "LoadType":        { "value": "@item().LoadType",        "type": "Expression" },
+                  "NewWatermark":    { "value": "@item().NewWatermark",    "type": "Expression" },
+                  "LastWatermark":   { "value": "@item().LastWatermark",   "type": "Expression" }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "SourceSystem": {
+        "type": "string",
+        "defaultValue": null
+      }
+    },
+    "folder": { "name": "Ingestion" },
+    "annotations": ["metadata-driven", "portfolio"]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "DS_Generic_ADLS_Parquet",
+  "properties": {
+    "description": "Parameterised Parquet sink. Container, folder and file name are supplied by the calling pipeline.",
+    "linkedServiceName": { "referenceName": "LS_ADLS_Gen2", "type": "LinkedServiceReference" },
+    "parameters": {
+      "Container":  { "type": "string" },
+      "FolderPath": { "type": "string" },
+      "FileName":   { "type": "string" }
+    },
+    "annotations": ["generic"],
+    "type": "Parquet",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobFSLocation",
+        "fileSystem": { "value": "@dataset().Container",  "type": "Expression" },
+        "folderPath": { "value": "@dataset().FolderPath", "type": "Expression" },
+        "fileName":   { "value": "@dataset().FileName",   "type": "Expression" }
+      },
+      "compressionCodec": "snappy"
+    },
+    "schema": []
+  }
+}

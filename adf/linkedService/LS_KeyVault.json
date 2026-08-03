@@ -1,0 +1,11 @@
+{
+  "name": "LS_KeyVault",
+  "properties": {
+    "description": "Every credential in this factory resolves through here. No secrets in the ARM template.",
+    "annotations": [],
+    "type": "AzureKeyVault",
+    "typeProperties": {
+      "baseUrl": "https://REPLACE-your-keyvault.vault.azure.net/"
+    }
+  }
+}

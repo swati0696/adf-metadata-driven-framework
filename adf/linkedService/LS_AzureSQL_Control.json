@@ -1,0 +1,14 @@
+{
+  "name": "LS_AzureSQL_Control",
+  "properties": {
+    "annotations": [],
+    "type": "AzureSqlDatabase",
+    "typeProperties": {
+      "server": "REPLACE-your-server.database.windows.net",
+      "database": "REPLACE-control-db",
+      "encrypt": "mandatory",
+      "trustServerCertificate": false,
+      "authenticationType": "SystemAssignedManagedIdentity"
+    }
+  }
+}

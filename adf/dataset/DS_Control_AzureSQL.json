@@ -1,0 +1,11 @@
+{
+  "name": "DS_Control_AzureSQL",
+  "properties": {
+    "description": "Points at the control database. Used only by Lookup activities.",
+    "linkedServiceName": { "referenceName": "LS_AzureSQL_Control", "type": "LinkedServiceReference" },
+    "annotations": ["control"],
+    "type": "AzureSqlTable",
+    "schema": [],
+    "typeProperties": { "schema": "ctl", "table": "SourceRegistry" }
+  }
+}

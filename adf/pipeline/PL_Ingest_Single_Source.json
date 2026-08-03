@@ -1,0 +1,158 @@
+{
+  "name": "PL_Ingest_Single_Source",
+  "properties": {
+    "description": "Copies one source object to ADLS Gen2, then advances the watermark. Every path and query arrives as a parameter, so this pipeline never changes when a source is added.",
+    "activities": [
+      {
+        "name": "SP_LogStart",
+        "type": "SqlServerStoredProcedure",
+        "policy": { "timeout": "0.00:10:00", "retry": 1 },
+        "typeProperties": {
+          "storedProcedureName": "[ctl].[usp_LogPipelineRun]",
+          "storedProcedureParameters": {
+            "PipelineRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "String" },
+            "PipelineName":  { "value": "PL_Ingest_Single_Source", "type": "String" },
+            "SourceId":      { "value": { "value": "@pipeline().parameters.SourceId", "type": "Expression" }, "type": "Int32" },
+            "StartTime":     { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "DateTime" },
+            "Status":        { "value": "Started", "type": "String" }
+          }
+        },
+        "linkedServiceName": { "referenceName": "LS_AzureSQL_Control", "type": "LinkedServiceReference" }
+      },
+      {
+        "name": "CP_SourceToBronze",
+        "type": "Copy",
+        "dependsOn": [{ "activity": "SP_LogStart", "dependencyConditions": ["Succeeded"] }],
+        "policy": {
+          "timeout": "0.02:00:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 120,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": { "value": "@pipeline().parameters.SourceQuery", "type": "Expression" },
+            "queryTimeout": "0.02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": { "type": "AzureBlobFSWriteSettings" },
+            "formatSettings": { "type": "ParquetWriteSettings" }
+          },
+          "enableStaging": false,
+          "parallelCopies": 4,
+          "dataIntegrationUnits": 4,
+          "validateDataConsistency": true,
+          "logSettings": {
+            "enableCopyActivityLog": true,
+            "copyActivityLogSettings": { "logLevel": "Warning", "enableReliableLogging": false },
+            "logLocationSettings": {
+              "linkedServiceName": { "referenceName": "LS_ADLS_Gen2", "type": "LinkedServiceReference" },
+              "path": "logs/copyactivity"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "DS_Generic_AzureSQL",
+            "type": "DatasetReference",
+            "parameters": {
+              "SchemaName": { "value": "@pipeline().parameters.SourceSchema", "type": "Expression" },
+              "TableName":  { "value": "@pipeline().parameters.SourceTable",  "type": "Expression" }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "DS_Generic_ADLS_Parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "Container": { "value": "@pipeline().parameters.TargetContainer", "type": "Expression" },
+              "FolderPath": {
+                "value": "@concat(pipeline().parameters.TargetPath, '/ingest_date=', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+                "type": "Expression"
+              },
+              "FileName": {
+                "value": "@concat(pipeline().parameters.SourceTable, '_', formatDateTime(utcNow(), 'yyyyMMddHHmmss'), '.parquet')",
+                "type": "Expression"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "SP_UpdateWatermark",
+        "type": "SqlServerStoredProcedure",
+        "description": "Runs only after a successful copy. If the copy fails the watermark stays put and the next run retries the same range.",
+        "dependsOn": [{ "activity": "CP_SourceToBronze", "dependencyConditions": ["Succeeded"] }],
+        "policy": { "timeout": "0.00:10:00", "retry": 2, "retryIntervalInSeconds": 30 },
+        "typeProperties": {
+          "storedProcedureName": "[ctl].[usp_UpdateWatermark]",
+          "storedProcedureParameters": {
+            "SourceId":      { "value": { "value": "@pipeline().parameters.SourceId", "type": "Expression" }, "type": "Int32" },
+            "NewWatermark":  { "value": { "value": "@pipeline().parameters.NewWatermark", "type": "Expression" }, "type": "DateTime" },
+            "PipelineRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "String" }
+          }
+        },
+        "linkedServiceName": { "referenceName": "LS_AzureSQL_Control", "type": "LinkedServiceReference" }
+      },
+      {
+        "name": "SP_LogSuccess",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [{ "activity": "SP_UpdateWatermark", "dependencyConditions": ["Succeeded"] }],
+        "policy": { "timeout": "0.00:10:00", "retry": 1 },
+        "typeProperties": {
+          "storedProcedureName": "[ctl].[usp_LogPipelineRun]",
+          "storedProcedureParameters": {
+            "PipelineRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "String" },
+            "PipelineName":  { "value": "PL_Ingest_Single_Source", "type": "String" },
+            "SourceId":      { "value": { "value": "@pipeline().parameters.SourceId", "type": "Expression" }, "type": "Int32" },
+            "StartTime":     { "value": { "value": "@pipeline().TriggerTime", "type": "Expression" }, "type": "DateTime" },
+            "EndTime":       { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "DateTime" },
+            "RowsRead":      { "value": { "value": "@activity('CP_SourceToBronze').output.rowsRead", "type": "Expression" }, "type": "Int64" },
+            "RowsCopied":    { "value": { "value": "@activity('CP_SourceToBronze').output.rowsCopied", "type": "Expression" }, "type": "Int64" },
+            "Status":        { "value": "Succeeded", "type": "String" },
+            "WatermarkFrom": { "value": { "value": "@pipeline().parameters.LastWatermark", "type": "Expression" }, "type": "DateTime" },
+            "WatermarkTo":   { "value": { "value": "@pipeline().parameters.NewWatermark", "type": "Expression" }, "type": "DateTime" }
+          }
+        },
+        "linkedServiceName": { "referenceName": "LS_AzureSQL_Control", "type": "LinkedServiceReference" }
+      },
+      {
+        "name": "SP_LogFailure",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [{ "activity": "CP_SourceToBronze", "dependencyConditions": ["Failed"] }],
+        "policy": { "timeout": "0.00:10:00", "retry": 1 },
+        "typeProperties": {
+          "storedProcedureName": "[ctl].[usp_LogPipelineRun]",
+          "storedProcedureParameters": {
+            "PipelineRunId": { "value": { "value": "@pipeline().RunId", "type": "Expression" }, "type": "String" },
+            "PipelineName":  { "value": "PL_Ingest_Single_Source", "type": "String" },
+            "SourceId":      { "value": { "value": "@pipeline().parameters.SourceId", "type": "Expression" }, "type": "Int32" },
+            "StartTime":     { "value": { "value": "@pipeline().TriggerTime", "type": "Expression" }, "type": "DateTime" },
+            "EndTime":       { "value": { "value": "@utcNow()", "type": "Expression" }, "type": "DateTime" },
+            "Status":        { "value": "Failed", "type": "String" },
+            "ErrorMessage":  { "value": { "value": "@activity('CP_SourceToBronze').Error.message", "type": "Expression" }, "type": "String" }
+          }
+        },
+        "linkedServiceName": { "referenceName": "LS_AzureSQL_Control", "type": "LinkedServiceReference" }
+      }
+    ],
+    "parameters": {
+      "SourceId":        { "type": "int" },
+      "SourceSchema":    { "type": "string" },
+      "SourceTable":     { "type": "string" },
+      "SourceQuery":     { "type": "string" },
+      "TargetContainer": { "type": "string" },
+      "TargetPath":      { "type": "string" },
+      "LoadType":        { "type": "string" },
+      "NewWatermark":    { "type": "string" },
+      "LastWatermark":   { "type": "string" }
+    },
+    "folder": { "name": "Ingestion" },
+    "annotations": ["metadata-driven", "portfolio"]
+  }
+}
